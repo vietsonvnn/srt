@@ -135,6 +135,13 @@
     padding:.25rem .75rem;
     border-radius:20px;
   }
+  .pair-hint{
+    font-size:.75rem;
+    color:var(--gray-400);
+    font-style:italic;
+    flex:1;
+    text-align:center;
+  }
   .btn-remove{
     background:none;
     border:none;
@@ -747,6 +754,7 @@ function addPair() {
   card.innerHTML = `
     <div class="pair-header">
       <span class="pair-number">C\u1eb7p file ${id}</span>
+      <span class="pair-hint">K\u00e9o th\u1ea3 2 file c\u00f9ng l\u00fac \u0111\u1ec3 t\u1ef1 \u0111\u1ed9ng nh\u1eadn di\u1ec7n</span>
       <button class="btn-remove" title="X\u00f3a c\u1eb7p file" onclick="removePair(${id})">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -856,8 +864,33 @@ function updateFileUI(pairId, type, filename) {
   nameEl.textContent = filename;
 }
 
-// ── Drag & Drop ──
+// ── Auto-detect file type ──
+function detectFileType(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.srt')) return 'srt';
+  if (name.endsWith('.txt') || name.endsWith('.docx')) return 'original';
+  return null;
+}
+
+function assignFileToPair(pairId, file, type) {
+  const pair = pairs.get(pairId);
+  if (!pair) return;
+  const prefix = type === 'srt' ? 'srt' : 'orig';
+  const wrapper = document.getElementById(`${prefix}-drop-${pairId}`);
+  if (!wrapper) return;
+  const input = wrapper.querySelector('input[type="file"]');
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change'));
+}
+
+// ── Drag & Drop (auto-detect khi kéo 1 hoặc 2 file) ──
 function setupDragDrop(pairId) {
+  const card = document.getElementById(`pair-${pairId}`);
+  if (!card) return;
+
+  // Single-zone drops still work
   ['srt', 'orig'].forEach(prefix => {
     const wrapper = document.getElementById(`${prefix}-drop-${pairId}`);
     if (!wrapper) return;
@@ -866,15 +899,56 @@ function setupDragDrop(pairId) {
     wrapper.addEventListener('drop', e => {
       e.preventDefault();
       wrapper.classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (!file) return;
-      const input = wrapper.querySelector('input[type="file"]');
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      input.files = dt.files;
-      input.dispatchEvent(new Event('change'));
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length === 0) return;
+
+      // Multiple files dropped on one zone → auto-detect
+      if (files.length >= 2) {
+        e.stopPropagation();
+        autoAssignFiles(pairId, files);
+        return;
+      }
+
+      // Single file: auto-detect or use target zone
+      const detected = detectFileType(files[0]);
+      if (detected) {
+        e.stopPropagation();
+        assignFileToPair(pairId, files[0], detected);
+      } else {
+        // Unknown type — assign to the zone it was dropped on
+        const type = prefix === 'srt' ? 'srt' : 'original';
+        assignFileToPair(pairId, files[0], type);
+      }
     });
   });
+
+  // Card-level drop for multi-file auto-detect
+  card.addEventListener('dragover', e => { e.preventDefault(); });
+  card.addEventListener('drop', e => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length >= 2) {
+      autoAssignFiles(pairId, files);
+    } else if (files.length === 1) {
+      const detected = detectFileType(files[0]);
+      if (detected) assignFileToPair(pairId, files[0], detected);
+      else showToast(`Không nhận diện được loại file: ${files[0].name}`);
+    }
+  });
+}
+
+function autoAssignFiles(pairId, files) {
+  let srtFile = null, origFile = null;
+  for (const f of files) {
+    const type = detectFileType(f);
+    if (type === 'srt' && !srtFile) srtFile = f;
+    else if (type === 'original' && !origFile) origFile = f;
+  }
+  if (srtFile) assignFileToPair(pairId, srtFile, 'srt');
+  if (origFile) assignFileToPair(pairId, origFile, 'original');
+  if (!srtFile && !origFile) {
+    showToast('Không tìm thấy file .srt hoặc .txt/.docx');
+  }
 }
 
 // ── SRT Parsing ──
