@@ -524,6 +524,59 @@
     letter-spacing:-.01em;
   }
 
+  /* ── Guide Card ── */
+  .guide-card{
+    background:#fff;
+    border-radius:var(--radius);
+    border:1px solid var(--gray-200);
+    box-shadow:var(--shadow);
+    margin-bottom:1rem;
+    overflow:hidden;
+  }
+  .guide-toggle{
+    display:flex;
+    align-items:center;
+    gap:.5rem;
+    padding:.75rem 1.25rem;
+    cursor:pointer;
+    font-weight:600;
+    font-size:.88rem;
+    color:var(--gray-600);
+    background:#fff;
+    border:none;
+    width:100%;
+    text-align:left;
+    transition:var(--transition);
+  }
+  .guide-toggle:hover{background:var(--gray-50);color:var(--gray-800)}
+  .guide-toggle svg:last-child{margin-left:auto;transition:transform .25s ease}
+  .guide-body{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height .3s cubic-bezier(.4,0,.2,1);
+  }
+  .guide-body.open{max-height:600px}
+  .guide-content{
+    padding:0 1.5rem 1.25rem;
+    border-top:1px solid var(--gray-100);
+    font-size:.85rem;
+    color:var(--gray-600);
+    line-height:1.7;
+  }
+  .guide-content ol{
+    padding-left:1.2rem;
+    margin:.5rem 0;
+  }
+  .guide-content li{margin-bottom:.4rem}
+  .guide-content .guide-tip{
+    background:var(--primary-light);
+    border-radius:var(--radius-sm);
+    padding:.6rem .9rem;
+    margin-top:.6rem;
+    font-size:.82rem;
+    color:var(--primary);
+  }
+
   /* ── Settings Card ── */
   .settings-card{
     background:#fff;
@@ -672,6 +725,29 @@
 <div class="toast-container" id="toast-container"></div>
 
 <div class="container">
+
+  <!-- Guide -->
+  <div class="guide-card">
+    <button class="guide-toggle" onclick="toggleGuide()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      H&#432;&#7899;ng d&#7851;n s&#7917; d&#7909;ng
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="guide-body" id="guide-body">
+      <div class="guide-content">
+        <ol>
+          <li><strong>Chu&#7849;n b&#7883; file:</strong> Xu&#7845;t file ph&#7909; &#273;&#7873; <code>.srt</code> t&#7915; CapCut v&#224; chu&#7849;n b&#7883; file n&#7897;i dung g&#7889;c (<code>.txt</code> ho&#7863;c <code>.docx</code>)</li>
+          <li><strong>T&#7843;i l&#234;n:</strong> K&#233;o th&#7843; c&#7843; 2 file c&#249;ng l&#250;c v&#224;o &#244; upload &mdash; tool s&#7869; t&#7921; nh&#7853;n di&#7879;n file SRT v&#224; file g&#7889;c. Ho&#7863;c ch&#7885;n t&#7915;ng file ri&#234;ng.</li>
+          <li><strong>S&#7917;a ph&#7909; &#273;&#7873;:</strong> Nh&#7845;n n&#250;t <strong>&ldquo;S&#7917;a ph&#7909; &#273;&#7873;&rdquo;</strong>. AI s&#7869; so s&#225;nh t&#7915;ng d&#242;ng ph&#7909; &#273;&#7873; v&#7899;i b&#7843;n g&#7889;c, ch&#7881; s&#7917;a nh&#7919;ng t&#7915; b&#7883; sai.</li>
+          <li><strong>Xem k&#7871;t qu&#7843;:</strong> B&#7843;ng so s&#225;nh hi&#7875;n th&#7883; r&#245; t&#7915; n&#224;o &#273;&#432;&#7907;c s&#7917;a, k&#232;m ghi ch&#250; ti&#7871;ng Vi&#7879;t.</li>
+          <li><strong>T&#7843;i v&#7873;:</strong> Nh&#7845;n <strong>&ldquo;T&#7843;i file &#273;&#227; s&#7917;a&rdquo;</strong> &#273;&#7875; l&#7845;y file SRT &#273;&#227; s&#7917;a l&#7895;i.</li>
+        </ol>
+        <div class="guide-tip">
+          &#128161; <strong>M&#7865;o:</strong> C&#243; th&#7875; x&#7917; l&#253; nhi&#7873;u c&#7863;p file c&#249;ng l&#250;c. N&#7871;u c&#243; nhi&#7873;u API Key, h&#7879; th&#7889;ng s&#7869; x&#7917; l&#253; song song &#273;&#7875; t&#259;ng t&#7889;c &#273;&#7897;.
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Settings -->
   <div class="settings-card">
@@ -1334,6 +1410,13 @@ function initSettings() {
   // Use saved value, or default key
   keysEl.value = savedKeys || 'sk-bee-837f622110f44d64a3ca729a77695314';
   if (savedModel) modelEl.value = savedModel;
+}
+
+function toggleGuide() {
+  const body = document.getElementById('guide-body');
+  const isOpen = body.classList.toggle('open');
+  const chevron = document.querySelector('.guide-toggle svg:last-child');
+  if (chevron) chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
 }
 
 function toggleSettings() {
