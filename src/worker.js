@@ -138,12 +138,13 @@ function parseAIResponse(raw) {
  */
 function isQuotaError(status, body) {
   if (status === 429) return true;
-  if (typeof body === 'string') {
+  // Only check body for quota keywords on error responses (4xx/5xx)
+  if (status >= 400 && typeof body === 'string') {
     const lower = body.toLowerCase();
     return (
       lower.includes('quota') ||
       lower.includes('rate limit') ||
-      lower.includes('exceeded') ||
+      lower.includes('rate_limit') ||
       lower.includes('insufficient_quota')
     );
   }
@@ -203,14 +204,13 @@ async function callAI(entries, originalText, keyManager, model) {
     // Quota / rate-limit — rotate key, retry
     if (isQuotaError(response.status, responseText)) {
       keyManager.markExhausted(key);
-      lastError = new Error(`Key exhausted (HTTP ${response.status})`);
+      lastError = new Error(`Key rate-limited (HTTP ${response.status}): ${responseText.slice(0, 200)}`);
       continue;
     }
 
-    // Other non-OK status — retry once with same key, then fail
+    // Other non-OK status — retry with same key
     if (!response.ok) {
-      lastError = new Error(`API error ${response.status}: ${responseText.slice(0, 300)}`);
-      // Allow one more retry (the loop increments attempt)
+      lastError = new Error(`API error (HTTP ${response.status}): ${responseText.slice(0, 300)}`);
       continue;
     }
 
@@ -327,8 +327,8 @@ export async function handleFix(request, env) {
       allCorrected = allCorrected.concat(correctedTexts);
     }
   } catch (err) {
-    const status = err.message.includes('exhausted') ? 503 : 502;
-    return corsResponse({ success: false, error: err.message }, status);
+    const status = err.message.includes('exhausted') || err.message.includes('rate-limited') ? 503 : 502;
+    return corsResponse({ success: false, error: `Processing failed: ${err.message}` }, status);
   }
 
   // ── Build response ──
