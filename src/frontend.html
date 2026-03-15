@@ -279,6 +279,38 @@
     display:none;
   }
 
+  .progress-bar-wrapper{
+    width:100%;
+    max-width:360px;
+    margin:.75rem auto 0;
+    height:6px;
+    background:var(--gray-200);
+    border-radius:3px;
+    overflow:hidden;
+    display:none;
+  }
+  .progress-bar-wrapper.visible{display:block}
+  .progress-bar-inner{
+    height:100%;
+    width:30%;
+    background:linear-gradient(90deg,var(--primary),#a78bfa);
+    border-radius:3px;
+    animation:progressPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes progressPulse{
+    0%{width:15%;margin-left:0}
+    50%{width:40%;margin-left:30%}
+    100%{width:15%;margin-left:85%}
+  }
+
+  .progress-hint{
+    margin-top:.4rem;
+    font-size:.82rem;
+    color:var(--gray-400);
+    display:none;
+  }
+  .progress-hint.visible{display:block}
+
   /* ── Spinner ── */
   .spinner{
     display:inline-block;
@@ -656,6 +688,8 @@
       S&#7917;a ph&#7909; &#273;&#7873;
     </button>
     <div class="progress-text" id="progress-text"></div>
+    <div class="progress-bar-wrapper" id="progress-bar"><div class="progress-bar-inner"></div></div>
+    <div class="progress-hint" id="progress-hint"></div>
   </div>
 
   <!-- Results Section -->
@@ -906,11 +940,11 @@ async function fixSRT(srtEntries, originalText) {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`Server error (HTTP ${response.status}). Please try again.`);
+    throw new Error(`Lỗi server (HTTP ${response.status}). Vui lòng thử lại.`);
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || `API error ${response.status}`);
+    throw new Error(data.error || `Lỗi API (${response.status})`);
   }
 
   return data;
@@ -926,17 +960,36 @@ async function processAll() {
   }
 
   if (completePairs.length === 0) {
-    showToast('Please add at least one complete file pair.');
+    showToast('Vui lòng thêm ít nhất một cặp file hoàn chỉnh.');
     return;
   }
 
   const btn = document.getElementById('btn-process');
+  const btnAddPair = document.getElementById('btn-add-pair');
   const progressText = document.getElementById('progress-text');
+  const progressBar = document.getElementById('progress-bar');
+  const progressHint = document.getElementById('progress-hint');
   const originalHTML = btn.innerHTML;
 
   btn.disabled = true;
+  btnAddPair.disabled = true;
   progressText.style.display = 'block';
+  progressBar.classList.add('visible');
+  progressHint.textContent = '\u0110ang x\u1eed l\u00fd... Vui l\u00f2ng \u0111\u1ee3i (c\u00f3 th\u1ec3 m\u1ea5t v\u00e0i ph\u00fat)';
+  progressHint.classList.add('visible');
   results.length = 0;
+
+  // Elapsed timer
+  const startTime = Date.now();
+  const timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const timeStr = mins > 0
+      ? `${mins} ph\u00fat ${secs.toString().padStart(2,'0')} gi\u00e2y`
+      : `${secs} gi\u00e2y`;
+    progressHint.textContent = `\u0110ang x\u1eed l\u00fd... Vui l\u00f2ng \u0111\u1ee3i (${timeStr})`;
+  }, 1000);
 
   // Hide old results & empty state
   const resultsArea = document.getElementById('results-area');
@@ -954,21 +1007,21 @@ async function processAll() {
       const srtEntries = parseSRT(srtContent);
 
       if (srtEntries.length === 0) {
-        showToast(`Could not parse any entries from ${cp.srtFile.name}`);
+        showToast(`Không thể đọc file phụ đề ${cp.srtFile.name}`);
         continue;
       }
 
       const originalText = await extractText(cp.originalFile);
 
       if (!originalText.trim()) {
-        showToast(`Original file ${cp.originalFile.name} appears empty.`);
+        showToast(`File gốc ${cp.originalFile.name} không có nội dung.`);
         continue;
       }
 
       const apiResult = await fixSRT(srtEntries, originalText);
 
       if (!apiResult.success) {
-        showToast(`${cp.srtFile.name}: ${apiResult.error || 'Unknown API error'}`);
+        showToast(`${cp.srtFile.name}: ${apiResult.error || 'Lỗi không xác định'}`);
         continue;
       }
 
@@ -978,19 +1031,22 @@ async function processAll() {
         stats: apiResult.stats,
       });
     } catch (err) {
-      showToast(`Error processing ${cp.srtFile.name}: ${err.message}`);
+      showToast(`Lỗi xử lý ${cp.srtFile.name}: ${err.message}`);
       console.error(err);
     }
   }
 
-  btn.disabled = false;
+  clearInterval(timerInterval);
   btn.innerHTML = originalHTML;
+  btnAddPair.disabled = false;
   progressText.style.display = 'none';
+  progressBar.classList.remove('visible');
+  progressHint.classList.remove('visible');
   updateProcessButton();
 
   if (results.length > 0) {
     renderResults();
-    showToast(`Successfully processed ${results.length} file(s).`, 'success');
+    showToast(`Đã xử lý thành công ${results.length} file.`, 'success');
   } else {
     document.getElementById('empty-state').style.display = '';
   }

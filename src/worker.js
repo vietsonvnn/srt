@@ -78,7 +78,7 @@ function parseAIResponse(raw) {
     throw new Error('Parsed value is not an array');
   } catch {
     // Try to find the first [...] block in the text
-    const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+    const arrayMatch = cleaned.match(/\[[\s\S]*?\]/);
     if (arrayMatch) {
       const parsed = JSON.parse(arrayMatch[0]);
       if (Array.isArray(parsed)) return parsed;
