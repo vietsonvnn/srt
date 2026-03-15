@@ -8,7 +8,7 @@ routes = [
 ]
 
 [vars]
-MODEL = "glm-4.7-flash"
+MODEL = "qwen/qwen3-32b"
 
 # API_KEYS should be set via `wrangler secret put API_KEYS`
 # Format: one key per line

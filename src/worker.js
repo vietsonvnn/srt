@@ -6,7 +6,7 @@
 
 const API_ENDPOINT = 'https://platform.beeknoee.com/api/v1/chat/completions';
 const DEFAULT_API_KEY = 'sk-bee-837f622110f44d64a3ca729a77695314';
-const CHUNK_SIZE = 5;        // small chunks — reasoning models are slow
+const CHUNK_SIZE = 15;       // balanced for speed + accuracy
 const MAX_RETRIES = 3;       // retries for non-429 errors
 const MAX_429_RETRIES = 10;  // separate budget for rate-limit retries (concurrent_limit)
 const FETCH_TIMEOUT_MS = 90_000; // 90s per API call (reasoning models need time)
@@ -65,6 +65,9 @@ Return ONLY the JSON array of corrected texts, in the same order. No explanation
 function parseAIResponse(raw) {
   let cleaned = raw.trim();
 
+  // Strip <think>...</think> blocks (reasoning models like qwen3)
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
   // Strip markdown code fences (```json ... ``` or ``` ... ```)
   const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) {
@@ -77,10 +80,11 @@ function parseAIResponse(raw) {
     if (Array.isArray(parsed)) return parsed;
     throw new Error('Parsed value is not an array');
   } catch {
-    // Try to find the first [...] block in the text
-    const arrayMatch = cleaned.match(/\[[\s\S]*?\]/);
-    if (arrayMatch) {
-      const parsed = JSON.parse(arrayMatch[0]);
+    // Find JSON array — match from first [ to last ]
+    const start = cleaned.indexOf('[');
+    const end = cleaned.lastIndexOf(']');
+    if (start !== -1 && end > start) {
+      const parsed = JSON.parse(cleaned.slice(start, end + 1));
       if (Array.isArray(parsed)) return parsed;
     }
     throw new Error('Failed to parse AI response as JSON array');
