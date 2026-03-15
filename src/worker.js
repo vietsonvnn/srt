@@ -171,6 +171,9 @@ async function callAI(entries, originalText, keyManager, model) {
 
     let response;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
       response = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -183,10 +186,15 @@ async function callAI(entries, originalText, keyManager, model) {
           temperature: 0.3,
           max_tokens: 8192,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
     } catch (err) {
-      lastError = new Error(`Network error: ${err.message}`);
-      // Network error — retry with same key (attempt counter already increments)
+      const msg = err.name === 'AbortError'
+        ? 'API request timed out'
+        : `Network error: ${err.message}`;
+      lastError = new Error(msg);
       continue;
     }
 
