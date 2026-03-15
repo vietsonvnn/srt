@@ -4,7 +4,7 @@ compatibility_date = "2024-01-01"
 workers_dev = true
 
 routes = [
-  { pattern = "srt.checkvarip.pro", zone_id = "dde854a37dc261bdadd678dbc91233c2" }
+  { pattern = "srt.checkvarip.pro/*", zone_id = "dde854a37dc261bdadd678dbc91233c2" }
 ]
 
 [vars]
