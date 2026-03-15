@@ -5,9 +5,11 @@
 // =============================================================================
 
 const API_ENDPOINT = 'https://platform.beeknoee.com/api/v1/chat/completions';
+const DEFAULT_API_KEY = 'sk-bee-837f622110f44d64a3ca729a77695314';
 const CHUNK_SIZE = 25;
 const MAX_RETRIES = 3;
 const FETCH_TIMEOUT_MS = 60_000; // 60s per API call
+const CHUNK_DELAY_MS = 3_000; // 3s delay between chunks to avoid rate limits
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 
@@ -24,46 +26,15 @@ export function corsResponse(body, status = 200) {
   });
 }
 
-// ─── Key Manager ─────────────────────────────────────────────────────────────
+// ─── Key Parsing ────────────────────────────────────────────────────────────
 
-class KeyManager {
-  constructor(keysString) {
-    this.keys = (keysString || '')
-      .split('\n')
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
-    this.currentIndex = 0;
-    this.exhaustedKeys = new Set();
-  }
-
-  getKey() {
-    if (this.keys.length === 0) {
-      throw new Error('No API keys configured');
-    }
-
-    const total = this.keys.length;
-    let checked = 0;
-
-    while (checked < total) {
-      const key = this.keys[this.currentIndex % total];
-      this.currentIndex = (this.currentIndex + 1) % total;
-
-      if (!this.exhaustedKeys.has(key)) {
-        return key;
-      }
-      checked++;
-    }
-
-    throw new Error('All API keys exhausted');
-  }
-
-  markExhausted(key) {
-    this.exhaustedKeys.add(key);
-  }
-
-  get allExhausted() {
-    return this.exhaustedKeys.size >= this.keys.length;
-  }
+function parseKeys(keysSource) {
+  const keys = (keysSource || '')
+    .split('\n')
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+  if (keys.length === 0) throw new Error('No API keys configured');
+  return keys;
 }
 
 // ─── AI Interaction ──────────────────────────────────────────────────────────
@@ -133,28 +104,9 @@ function parseAIResponse(raw) {
 }
 
 /**
- * Returns true if the error indicates a quota/rate-limit issue that
- * warrants rotating to the next API key.
+ * Call the Beeknoee API for a single chunk with a specific key + retries.
  */
-function isQuotaError(status, body) {
-  if (status === 429) return true;
-  // Only check body for quota keywords on error responses (4xx/5xx)
-  if (status >= 400 && typeof body === 'string') {
-    const lower = body.toLowerCase();
-    return (
-      lower.includes('quota') ||
-      lower.includes('rate limit') ||
-      lower.includes('rate_limit') ||
-      lower.includes('insufficient_quota')
-    );
-  }
-  return false;
-}
-
-/**
- * Call the Beeknoee API for a single chunk with retry + key rotation.
- */
-async function callAI(entries, originalText, keyManager, model) {
+async function callAIWithKey(entries, originalText, key, model) {
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: buildUserPrompt(originalText, entries) },
@@ -163,13 +115,6 @@ async function callAI(entries, originalText, keyManager, model) {
   let lastError = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    let key;
-    try {
-      key = keyManager.getKey();
-    } catch (err) {
-      throw new Error('All API keys exhausted');
-    }
-
     let response;
     try {
       const controller = new AbortController();
@@ -201,14 +146,16 @@ async function callAI(entries, originalText, keyManager, model) {
 
     const responseText = await response.text();
 
-    // Quota / rate-limit — rotate key, retry
-    if (isQuotaError(response.status, responseText)) {
-      keyManager.markExhausted(key);
-      lastError = new Error(`Key rate-limited (HTTP ${response.status}): ${responseText.slice(0, 200)}`);
+    // Rate-limit — wait and retry
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('retry-after') || '5', 10);
+      const waitMs = Math.min(retryAfter * 1000, 15_000);
+      await new Promise(r => setTimeout(r, waitMs));
+      lastError = new Error(`Rate limited (HTTP 429), waited ${waitMs}ms`);
       continue;
     }
 
-    // Other non-OK status — retry with same key
+    // Other error
     if (!response.ok) {
       lastError = new Error(`API error (HTTP ${response.status}): ${responseText.slice(0, 300)}`);
       continue;
@@ -297,45 +244,68 @@ export async function handleFix(request, env) {
   }
 
   // ── Setup ──
-  // Client-provided keys take priority over env vars
+  // Priority: client keys > env var > hardcoded default
   const keysSource = (typeof apiKeys === 'string' && apiKeys.trim())
     ? apiKeys
-    : env.API_KEYS;
-  const keyManager = new KeyManager(keysSource);
+    : (env.API_KEYS || DEFAULT_API_KEY);
+  let keys;
+  try {
+    keys = parseKeys(keysSource);
+  } catch (err) {
+    return corsResponse({ success: false, error: err.message }, 400);
+  }
   const model = (typeof requestModel === 'string' && requestModel.trim())
     ? requestModel
     : (env.MODEL || 'glm-4.7-flash');
 
-  // ── Chunk & process ──
+  // ── Chunk & process (parallel batches) ──
+  // Each batch runs up to N chunks in parallel (one per key).
+  // e.g. 3 keys, 7 chunks → batch1: [c1,c2,c3], batch2: [c4,c5,c6], batch3: [c7]
   const chunks = chunkArray(srtEntries, CHUNK_SIZE);
-  let allCorrected = [];
+  const batches = chunkArray(chunks, keys.length);
+  const allCorrected = new Array(chunks.length);
 
   try {
-    for (const chunk of chunks) {
-      const correctedTexts = await callAI(chunk, originalText, keyManager, model);
-
-      if (correctedTexts.length !== chunk.length) {
-        return corsResponse(
-          {
-            success: false,
-            error: `AI returned ${correctedTexts.length} entries but expected ${chunk.length}`,
-          },
-          502,
-        );
+    let chunkOffset = 0;
+    for (let bi = 0; bi < batches.length; bi++) {
+      if (bi > 0) {
+        await new Promise(r => setTimeout(r, CHUNK_DELAY_MS));
       }
 
-      allCorrected = allCorrected.concat(correctedTexts);
+      const batch = batches[bi];
+      const results = await Promise.all(
+        batch.map((chunk, i) =>
+          callAIWithKey(chunk, originalText, keys[i % keys.length], model)
+        )
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].length !== batch[i].length) {
+          return corsResponse(
+            {
+              success: false,
+              error: `AI returned ${results[i].length} entries but expected ${batch[i].length}`,
+            },
+            502,
+          );
+        }
+        allCorrected[chunkOffset + i] = results[i];
+      }
+      chunkOffset += batch.length;
     }
   } catch (err) {
     const status = err.message.includes('exhausted') || err.message.includes('rate-limited') ? 503 : 502;
     return corsResponse({ success: false, error: `Processing failed: ${err.message}` }, status);
   }
 
+  // Flatten chunk results into a single array
+  const flatCorrected = allCorrected.flat();
+
   // ── Build response ──
   let fixedCount = 0;
 
   const fixed = srtEntries.map((entry, i) => {
-    const correctedText = String(allCorrected[i]);
+    const correctedText = String(flatCorrected[i]);
     const changed = correctedText !== entry.text;
     if (changed) fixedCount++;
 
