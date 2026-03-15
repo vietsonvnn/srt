@@ -1,0 +1,18 @@
+{
+  "name": "srt-fixer",
+  "version": "1.0.0",
+  "description": "SRT Fixer - Fix CapCut SRT subtitles using AI",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vietsonvnn/srt.git"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

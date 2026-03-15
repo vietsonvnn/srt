@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SRT Fixer — Fix CapCut subtitles with AI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+  :root{
+    --primary:#6366f1;
+    --primary-hover:#4f46e5;
+    --primary-light:#eef2ff;
+    --success:#10b981;
+    --success-light:#ecfdf5;
+    --error:#ef4444;
+    --error-light:#fef2f2;
+    --gray-50:#f9fafb;
+    --gray-100:#f3f4f6;
+    --gray-200:#e5e7eb;
+    --gray-300:#d1d5db;
+    --gray-400:#9ca3af;
+    --gray-500:#6b7280;
+    --gray-600:#4b5563;
+    --gray-700:#374151;
+    --gray-800:#1f2937;
+    --gray-900:#111827;
+    --radius:12px;
+    --radius-sm:8px;
+    --shadow:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06);
+    --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.06);
+    --shadow-lg:0 10px 15px rgba(0,0,0,.1),0 4px 6px rgba(0,0,0,.05);
+    --transition:all .2s ease;
+  }
+
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+    background:var(--gray-50);
+    color:var(--gray-800);
+    line-height:1.6;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ── Header ── */
+  .header{
+    background:linear-gradient(135deg,var(--primary) 0%,#818cf8 100%);
+    color:#fff;
+    text-align:center;
+    padding:2.5rem 1rem 2rem;
+  }
+  .header h1{font-size:2rem;font-weight:700;letter-spacing:-.02em}
+  .header p{opacity:.85;margin-top:.35rem;font-size:1.05rem;font-weight:400}
+
+  /* ── Container ── */
+  .container{
+    max-width:860px;
+    width:100%;
+    margin:0 auto;
+    padding:1.5rem 1rem 3rem;
+    flex:1;
+  }
+
+  /* ── Card ── */
+  .card{
+    background:#fff;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    padding:1.5rem;
+    margin-bottom:1.25rem;
+    transition:var(--transition);
+  }
+  .card:hover{box-shadow:var(--shadow-md)}
+
+  /* ── File pair ── */
+  .pair-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:1rem;
+  }
+  .pair-number{
+    font-weight:600;
+    font-size:.95rem;
+    color:var(--primary);
+    background:var(--primary-light);
+    padding:.25rem .75rem;
+    border-radius:20px;
+  }
+  .btn-remove{
+    background:none;
+    border:none;
+    color:var(--gray-400);
+    cursor:pointer;
+    font-size:1.2rem;
+    padding:.25rem .5rem;
+    border-radius:var(--radius-sm);
+    transition:var(--transition);
+  }
+  .btn-remove:hover{color:var(--error);background:var(--error-light)}
+
+  .file-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1rem;
+  }
+  @media(max-width:600px){
+    .file-row{grid-template-columns:1fr}
+  }
+
+  .file-group label{
+    display:block;
+    font-size:.85rem;
+    font-weight:600;
+    color:var(--gray-600);
+    margin-bottom:.4rem;
+  }
+
+  .file-input-wrapper{
+    position:relative;
+    border:2px dashed var(--gray-200);
+    border-radius:var(--radius-sm);
+    padding:1rem;
+    text-align:center;
+    cursor:pointer;
+    transition:var(--transition);
+    min-height:80px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:.3rem;
+  }
+  .file-input-wrapper:hover,.file-input-wrapper.dragover{
+    border-color:var(--primary);
+    background:var(--primary-light);
+  }
+  .file-input-wrapper.has-file{
+    border-color:var(--success);
+    background:var(--success-light);
+    border-style:solid;
+  }
+  .file-input-wrapper input[type="file"]{
+    position:absolute;
+    inset:0;
+    opacity:0;
+    cursor:pointer;
+  }
+  .file-input-icon{font-size:1.5rem;line-height:1}
+  .file-input-label{font-size:.85rem;color:var(--gray-500)}
+  .file-input-name{font-size:.8rem;color:var(--success);font-weight:600;word-break:break-all}
+
+  /* ── Buttons ── */
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:.5rem;
+    border:none;
+    border-radius:var(--radius-sm);
+    font-size:.9rem;
+    font-weight:600;
+    cursor:pointer;
+    padding:.6rem 1.2rem;
+    transition:var(--transition);
+  }
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  .btn-primary{
+    background:var(--primary);
+    color:#fff;
+  }
+  .btn-primary:hover:not(:disabled){background:var(--primary-hover);transform:translateY(-1px);box-shadow:var(--shadow-md)}
+  .btn-primary:active:not(:disabled){transform:translateY(0)}
+
+  .btn-outline{
+    background:#fff;
+    color:var(--gray-600);
+    border:1.5px solid var(--gray-200);
+  }
+  .btn-outline:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+
+  .btn-success{background:var(--success);color:#fff}
+  .btn-success:hover:not(:disabled){background:#059669;transform:translateY(-1px);box-shadow:var(--shadow-md)}
+
+  .btn-sm{padding:.4rem .8rem;font-size:.8rem}
+  .btn-lg{padding:.85rem 2rem;font-size:1.05rem}
+
+  .actions-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:.75rem;
+    margin-top:.5rem;
+    margin-bottom:1.5rem;
+  }
+
+  .process-section{text-align:center;margin:1.5rem 0}
+
+  /* ── Progress ── */
+  .progress-text{
+    margin-top:.75rem;
+    font-size:.9rem;
+    color:var(--gray-500);
+    display:none;
+  }
+
+  /* ── Spinner ── */
+  .spinner{
+    display:inline-block;
+    width:18px;height:18px;
+    border:2.5px solid rgba(255,255,255,.3);
+    border-top-color:#fff;
+    border-radius:50%;
+    animation:spin .6s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── Results ── */
+  #results-area{display:none}
+  #results-area.visible{display:block;animation:fadeIn .4s ease}
+
+  @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  .result-card{
+    background:#fff;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    margin-bottom:1rem;
+    animation:slideIn .35s ease both;
+  }
+  .result-card:nth-child(2){animation-delay:.08s}
+  .result-card:nth-child(3){animation-delay:.16s}
+
+  .result-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:1rem 1.25rem;
+    border-bottom:1px solid var(--gray-100);
+    flex-wrap:wrap;
+    gap:.5rem;
+  }
+  .result-filename{font-weight:600;font-size:.95rem;word-break:break-all}
+
+  .result-stats{
+    display:flex;
+    gap:.75rem;
+    flex-wrap:wrap;
+  }
+  .stat-badge{
+    font-size:.78rem;
+    font-weight:600;
+    padding:.2rem .6rem;
+    border-radius:20px;
+  }
+  .stat-errors{background:var(--error-light);color:var(--error)}
+  .stat-fixed{background:var(--success-light);color:var(--success)}
+  .stat-clean{background:var(--primary-light);color:var(--primary)}
+
+  .result-actions{
+    display:flex;
+    align-items:center;
+    gap:.5rem;
+    padding:.75rem 1.25rem;
+    border-top:1px solid var(--gray-100);
+  }
+
+  /* ── Diff ── */
+  .diff-toggle{
+    background:none;
+    border:none;
+    color:var(--primary);
+    cursor:pointer;
+    font-size:.85rem;
+    font-weight:600;
+    padding:.3rem .6rem;
+    border-radius:var(--radius-sm);
+    transition:var(--transition);
+  }
+  .diff-toggle:hover{background:var(--primary-light)}
+
+  .diff-container{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height .35s ease;
+  }
+  .diff-container.open{max-height:5000px}
+
+  .diff-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:.82rem;
+    font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;
+  }
+  .diff-table th{
+    padding:.5rem .75rem;
+    text-align:left;
+    font-size:.75rem;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    color:var(--gray-500);
+    background:var(--gray-50);
+    border-bottom:1px solid var(--gray-200);
+    position:sticky;
+    top:0;
+  }
+  .diff-table td{
+    padding:.45rem .75rem;
+    vertical-align:top;
+    border-bottom:1px solid var(--gray-100);
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .diff-index{
+    color:var(--gray-400);
+    width:40px;
+    text-align:center;
+    font-size:.75rem;
+  }
+  .diff-row-changed td{background:#fffbeb}
+  .diff-original{color:var(--error)}
+  .diff-fixed{color:var(--success)}
+
+  .diff-scroll{
+    max-height:400px;
+    overflow-y:auto;
+    border-top:1px solid var(--gray-100);
+  }
+
+  /* ── Download All ── */
+  .download-all-section{
+    text-align:center;
+    margin-top:1.5rem;
+    padding-top:1rem;
+  }
+
+  /* ── Toast ── */
+  .toast-container{
+    position:fixed;
+    top:1rem;
+    right:1rem;
+    z-index:9999;
+    display:flex;
+    flex-direction:column;
+    gap:.5rem;
+  }
+  .toast{
+    padding:.75rem 1.25rem;
+    border-radius:var(--radius-sm);
+    font-size:.88rem;
+    font-weight:500;
+    box-shadow:var(--shadow-lg);
+    animation:toastIn .3s ease;
+    max-width:380px;
+    word-break:break-word;
+  }
+  .toast-error{background:var(--error);color:#fff}
+  .toast-success{background:var(--success);color:#fff}
+  .toast-info{background:var(--gray-700);color:#fff}
+
+  @keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+  @keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}
+
+  /* ── Footer ── */
+  .footer{
+    text-align:center;
+    padding:1.5rem 1rem;
+    color:var(--gray-400);
+    font-size:.85rem;
+  }
+  .footer .heart{color:#ef4444;font-size:1rem}
+
+  /* ── Responsive ── */
+  @media(max-width:600px){
+    .header{padding:1.5rem 1rem}
+    .header h1{font-size:1.5rem}
+    .container{padding:1rem .75rem 2rem}
+    .card{padding:1.1rem}
+    .result-header{flex-direction:column;align-items:flex-start}
+    .btn-lg{width:100%}
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>SRT Fixer</h1>
+  <p>Fix CapCut subtitles with AI</p>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<div class="container">
+
+  <!-- Upload Section -->
+  <div id="pairs-container"></div>
+
+  <div class="actions-row">
+    <button class="btn btn-outline" id="btn-add-pair" onclick="addPair()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+      Add more files
+    </button>
+  </div>
+
+  <!-- Process Button -->
+  <div class="process-section">
+    <button class="btn btn-primary btn-lg" id="btn-process" disabled onclick="processAll()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Fix Subtitles
+    </button>
+    <div class="progress-text" id="progress-text"></div>
+  </div>
+
+  <!-- Results Section -->
+  <div id="results-area">
+    <h2 style="font-size:1.15rem;font-weight:700;margin-bottom:1rem;color:var(--gray-700)">Results</h2>
+    <div id="results-container"></div>
+    <div class="download-all-section" id="download-all-section" style="display:none">
+      <button class="btn btn-success btn-lg" onclick="downloadAll()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download All
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  Made by jution <span class="heart">&#10084;&#65039;</span>
+</div>
+
+<script>
+// ── State ──
+let pairCounter = 0;
+const pairs = new Map(); // id -> { srtFile, originalFile }
+const results = [];      // processed results
+
+// ── Toast ──
+function showToast(message, type = 'error') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'toastOut .3s ease forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+// ── Pair Management ──
+function addPair() {
+  pairCounter++;
+  const id = pairCounter;
+  pairs.set(id, { srtFile: null, originalFile: null });
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = `pair-${id}`;
+  card.style.animation = 'slideIn .3s ease';
+
+  card.innerHTML = `
+    <div class="pair-header">
+      <span class="pair-number">Pair ${id}</span>
+      <button class="btn-remove" title="Remove pair" onclick="removePair(${id})">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="file-row">
+      <div class="file-group">
+        <label>SRT File</label>
+        <div class="file-input-wrapper" id="srt-drop-${id}">
+          <input type="file" accept=".srt" onchange="handleFile(${id},'srt',this)">
+          <div class="file-input-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div class="file-input-label">Drop .srt or click to browse</div>
+        </div>
+      </div>
+      <div class="file-group">
+        <label>Original Text</label>
+        <div class="file-input-wrapper" id="orig-drop-${id}">
+          <input type="file" accept=".txt,.docx" onchange="handleFile(${id},'original',this)">
+          <div class="file-input-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <div class="file-input-label">Drop .txt / .docx or click</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('pairs-container').appendChild(card);
+  updateRemoveButtons();
+  updateProcessButton();
+  setupDragDrop(id);
+}
+
+function removePair(id) {
+  const card = document.getElementById(`pair-${id}`);
+  if (!card) return;
+  card.style.animation = 'fadeIn .25s ease reverse forwards';
+  setTimeout(() => {
+    card.remove();
+    pairs.delete(id);
+    renumberPairs();
+    updateRemoveButtons();
+    updateProcessButton();
+  }, 250);
+}
+
+function renumberPairs() {
+  const cards = document.querySelectorAll('#pairs-container .card');
+  cards.forEach((card, i) => {
+    const badge = card.querySelector('.pair-number');
+    if (badge) badge.textContent = `Pair ${i + 1}`;
+  });
+}
+
+function updateRemoveButtons() {
+  const cards = document.querySelectorAll('#pairs-container .card');
+  cards.forEach(card => {
+    const btn = card.querySelector('.btn-remove');
+    if (btn) btn.style.display = cards.length <= 1 ? 'none' : '';
+  });
+}
+
+function updateProcessButton() {
+  const btn = document.getElementById('btn-process');
+  let hasComplete = false;
+  for (const [, p] of pairs) {
+    if (p.srtFile && p.originalFile) { hasComplete = true; break; }
+  }
+  btn.disabled = !hasComplete;
+}
+
+// ── File Handling ──
+function handleFile(pairId, type, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const pair = pairs.get(pairId);
+  if (!pair) return;
+
+  if (type === 'srt') {
+    pair.srtFile = file;
+    updateFileUI(pairId, 'srt', file.name);
+  } else {
+    pair.originalFile = file;
+    updateFileUI(pairId, 'original', file.name);
+  }
+  updateProcessButton();
+}
+
+function updateFileUI(pairId, type, filename) {
+  const prefix = type === 'srt' ? 'srt' : 'orig';
+  const wrapper = document.getElementById(`${prefix}-drop-${pairId}`);
+  if (!wrapper) return;
+  wrapper.classList.add('has-file');
+  const icon = wrapper.querySelector('.file-input-icon');
+  const label = wrapper.querySelector('.file-input-label');
+  let nameEl = wrapper.querySelector('.file-input-name');
+
+  if (icon) icon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  if (label) label.textContent = 'File selected';
+  if (!nameEl) {
+    nameEl = document.createElement('div');
+    nameEl.className = 'file-input-name';
+    wrapper.appendChild(nameEl);
+  }
+  nameEl.textContent = filename;
+}
+
+// ── Drag & Drop ──
+function setupDragDrop(pairId) {
+  ['srt', 'orig'].forEach(prefix => {
+    const wrapper = document.getElementById(`${prefix}-drop-${pairId}`);
+    if (!wrapper) return;
+    wrapper.addEventListener('dragover', e => { e.preventDefault(); wrapper.classList.add('dragover'); });
+    wrapper.addEventListener('dragleave', () => wrapper.classList.remove('dragover'));
+    wrapper.addEventListener('drop', e => {
+      e.preventDefault();
+      wrapper.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      const input = wrapper.querySelector('input[type="file"]');
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change'));
+    });
+  });
+}
+
+// ── SRT Parsing ──
+function parseSRT(content) {
+  const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const blocks = normalized.trim().split(/\n\n+/);
+  const entries = [];
+
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    if (lines.length < 2) continue;
+
+    const indexLine = lines[0].trim();
+    const index = parseInt(indexLine, 10);
+    if (isNaN(index)) continue;
+
+    const timeCode = lines[1].trim();
+    if (!timeCode.includes('-->')) continue;
+
+    const text = lines.slice(2).join('\n');
+    entries.push({ index, timeCode, text });
+  }
+  return entries;
+}
+
+function buildSRT(entries) {
+  return entries.map(e =>
+    `${e.index}\n${e.timeCode}\n${e.text}`
+  ).join('\n\n') + '\n';
+}
+
+// ── DOCX / TXT Extraction ──
+async function extractText(file) {
+  if (file.name.toLowerCase().endsWith('.docx')) {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  }
+  return await file.text();
+}
+
+// ── API Call ──
+async function fixSRT(srtEntries, originalText) {
+  const response = await fetch('/api/fix', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ srtEntries, originalText })
+  });
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`API error ${response.status}: ${errBody}`);
+  }
+  return await response.json();
+}
+
+// ── Processing ──
+async function processAll() {
+  const completePairs = [];
+  for (const [id, p] of pairs) {
+    if (p.srtFile && p.originalFile) {
+      completePairs.push({ id, ...p });
+    }
+  }
+
+  if (completePairs.length === 0) {
+    showToast('Please add at least one complete file pair.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-process');
+  const progressText = document.getElementById('progress-text');
+  const originalHTML = btn.innerHTML;
+
+  btn.disabled = true;
+  progressText.style.display = 'block';
+  results.length = 0;
+
+  // Hide old results
+  const resultsArea = document.getElementById('results-area');
+  resultsArea.classList.remove('visible');
+
+  for (let i = 0; i < completePairs.length; i++) {
+    const cp = completePairs[i];
+    const label = `Processing ${i + 1}/${completePairs.length}...`;
+    btn.innerHTML = `<span class="spinner"></span> ${label}`;
+    progressText.textContent = `Working on: ${cp.srtFile.name}`;
+
+    try {
+      const srtContent = await cp.srtFile.text();
+      const srtEntries = parseSRT(srtContent);
+
+      if (srtEntries.length === 0) {
+        showToast(`Could not parse any entries from ${cp.srtFile.name}`);
+        continue;
+      }
+
+      const originalText = await extractText(cp.originalFile);
+
+      if (!originalText.trim()) {
+        showToast(`Original file ${cp.originalFile.name} appears empty.`);
+        continue;
+      }
+
+      const apiResult = await fixSRT(srtEntries, originalText);
+
+      results.push({
+        filename: cp.srtFile.name,
+        fixed: apiResult.fixed,
+        stats: apiResult.stats,
+      });
+    } catch (err) {
+      showToast(`Error processing ${cp.srtFile.name}: ${err.message}`);
+      console.error(err);
+    }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = originalHTML;
+  progressText.style.display = 'none';
+  updateProcessButton();
+
+  if (results.length > 0) {
+    renderResults();
+    showToast(`Successfully processed ${results.length} file(s).`, 'success');
+  }
+}
+
+// ── Render Results ──
+function renderResults() {
+  const container = document.getElementById('results-container');
+  container.innerHTML = '';
+
+  results.forEach((res, idx) => {
+    const changedEntries = res.fixed.filter(e => e.changed);
+    const card = document.createElement('div');
+    card.className = 'result-card';
+
+    const errorsLabel = res.stats.errors === 1 ? 'error' : 'errors';
+    const fixedLabel = res.stats.fixed === 1 ? 'entry' : 'entries';
+
+    card.innerHTML = `
+      <div class="result-header">
+        <span class="result-filename">${escapeHTML(res.filename)}</span>
+        <div class="result-stats">
+          ${res.stats.errors > 0
+            ? `<span class="stat-badge stat-errors">Found ${res.stats.errors} ${errorsLabel}</span>`
+            : `<span class="stat-badge stat-clean">No errors found</span>`
+          }
+          ${res.stats.fixed > 0
+            ? `<span class="stat-badge stat-fixed">Fixed ${res.stats.fixed} ${fixedLabel}</span>`
+            : ''
+          }
+        </div>
+      </div>
+      ${changedEntries.length > 0 ? `
+        <div style="padding:.5rem 1.25rem">
+          <button class="diff-toggle" onclick="toggleDiff(this)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:3px"><polyline points="6 9 12 15 18 9"/></svg>
+            Show changes (${changedEntries.length})
+          </button>
+        </div>
+        <div class="diff-container" id="diff-${idx}">
+          <div class="diff-scroll">
+            <table class="diff-table">
+              <thead>
+                <tr>
+                  <th style="width:40px">#</th>
+                  <th>Original</th>
+                  <th>Fixed</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${changedEntries.map(e => `
+                  <tr class="diff-row-changed">
+                    <td class="diff-index">${e.index}</td>
+                    <td class="diff-original">${escapeHTML(e.original)}</td>
+                    <td class="diff-fixed">${escapeHTML(e.text)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ` : ''}
+      <div class="result-actions">
+        <button class="btn btn-primary btn-sm" onclick="downloadSingle(${idx})">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Fixed SRT
+        </button>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+
+  // Show "Download All" if multiple results
+  const dlAllSection = document.getElementById('download-all-section');
+  dlAllSection.style.display = results.length > 1 ? '' : 'none';
+
+  const resultsArea = document.getElementById('results-area');
+  resultsArea.classList.add('visible');
+  resultsArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Diff Toggle ──
+function toggleDiff(btn) {
+  const container = btn.closest('.result-card').querySelector('.diff-container');
+  if (!container) return;
+  const isOpen = container.classList.toggle('open');
+  const arrow = btn.querySelector('svg');
+  if (arrow) arrow.style.transform = isOpen ? 'rotate(180deg)' : '';
+  btn.childNodes[btn.childNodes.length - 1].textContent =
+    isOpen ? btn.textContent.replace('Show', 'Hide') : btn.textContent.replace('Hide', 'Show');
+}
+
+// ── Download ──
+function downloadSRT(entries, filename) {
+  const content = buildSRT(entries);
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename.replace(/\.srt$/i, '_fixed.srt');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadSingle(idx) {
+  const res = results[idx];
+  if (!res) return;
+  downloadSRT(res.fixed, res.filename);
+}
+
+function downloadAll() {
+  results.forEach((res, idx) => {
+    setTimeout(() => downloadSRT(res.fixed, res.filename), idx * 200);
+  });
+}
+
+// ── Utilities ──
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Init ──
+addPair();
+</script>
+
+</body>
+</html>
