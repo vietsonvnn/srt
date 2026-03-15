@@ -763,21 +763,21 @@ function addPair() {
       <div class="file-group">
         <label>File ph\u1ee5 \u0111\u1ec1 (SRT)</label>
         <div class="file-input-wrapper" id="srt-drop-${id}">
-          <input type="file" accept=".srt" onchange="handleFile(${id},'srt',this)">
+          <input type="file" accept=".srt,.txt,.docx" onchange="handleFile(${id},'srt',this)">
           <div class="file-input-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           </div>
-          <div class="file-input-label">K\u00e9o th\u1ea3 file .srt ho\u1eb7c nh\u1ea5n \u0111\u1ec3 ch\u1ecdn</div>
+          <div class="file-input-label">K\u00e9o th\u1ea3 ho\u1eb7c nh\u1ea5n \u0111\u1ec3 ch\u1ecdn file</div>
         </div>
       </div>
       <div class="file-group">
         <label>N\u1ed9i dung g\u1ed1c</label>
         <div class="file-input-wrapper" id="orig-drop-${id}">
-          <input type="file" accept=".txt,.docx" onchange="handleFile(${id},'original',this)">
+          <input type="file" accept=".srt,.txt,.docx" onchange="handleFile(${id},'original',this)">
           <div class="file-input-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-400)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </div>
-          <div class="file-input-label">K\u00e9o th\u1ea3 file .txt/.docx ho\u1eb7c nh\u1ea5n \u0111\u1ec3 ch\u1ecdn</div>
+          <div class="file-input-label">K\u00e9o th\u1ea3 ho\u1eb7c nh\u1ea5n \u0111\u1ec3 ch\u1ecdn file</div>
         </div>
       </div>
     </div>
@@ -835,7 +835,11 @@ function handleFile(pairId, type, input) {
   const pair = pairs.get(pairId);
   if (!pair) return;
 
-  if (type === 'srt') {
+  // Auto-detect: override target zone based on file extension
+  const detected = detectFileType(file);
+  const actualType = detected || type;
+
+  if (actualType === 'srt') {
     pair.srtFile = file;
     updateFileUI(pairId, 'srt', file.name);
   } else {
