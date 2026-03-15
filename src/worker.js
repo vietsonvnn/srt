@@ -261,7 +261,7 @@ export async function handleFix(request, env) {
     return corsResponse({ success: false, error: 'Invalid JSON body' }, 400);
   }
 
-  const { srtEntries, originalText } = body || {};
+  const { srtEntries, originalText, apiKeys, model: requestModel } = body || {};
 
   if (!Array.isArray(srtEntries) || srtEntries.length === 0) {
     return corsResponse(
@@ -297,8 +297,14 @@ export async function handleFix(request, env) {
   }
 
   // ── Setup ──
-  const keyManager = new KeyManager(env.API_KEYS);
-  const model = env.MODEL || 'glm-4.7-flash';
+  // Client-provided keys take priority over env vars
+  const keysSource = (typeof apiKeys === 'string' && apiKeys.trim())
+    ? apiKeys
+    : env.API_KEYS;
+  const keyManager = new KeyManager(keysSource);
+  const model = (typeof requestModel === 'string' && requestModel.trim())
+    ? requestModel
+    : (env.MODEL || 'glm-4.7-flash');
 
   // ── Chunk & process ──
   const chunks = chunkArray(srtEntries, CHUNK_SIZE);
