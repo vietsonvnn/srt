@@ -528,59 +528,87 @@
   .settings-card{
     background:#fff;
     border-radius:var(--radius);
-    box-shadow:var(--shadow);
-    margin-bottom:1.25rem;
+    border:1px solid var(--gray-200);
+    box-shadow:var(--shadow),0 0 0 1px rgba(0,0,0,.02);
+    margin-bottom:1.5rem;
     overflow:hidden;
+    transition:box-shadow .2s ease;
+  }
+  .settings-card:hover{
+    box-shadow:var(--shadow-md),0 0 0 1px rgba(0,0,0,.02);
   }
   .settings-toggle{
     display:flex;
     align-items:center;
-    gap:.5rem;
-    padding:.75rem 1.25rem;
+    gap:.6rem;
+    padding:.85rem 1.25rem;
     cursor:pointer;
     font-weight:600;
     font-size:.9rem;
-    color:var(--gray-700);
+    color:var(--gray-600);
+    letter-spacing:.01em;
     border:none;
     background:none;
     width:100%;
     transition:var(--transition);
+    user-select:none;
   }
-  .settings-toggle:hover{background:var(--gray-50)}
+  .settings-toggle:hover{
+    background:var(--gray-50);
+    color:var(--gray-800);
+  }
+  .settings-toggle svg:first-child{
+    color:var(--gray-400);
+    flex-shrink:0;
+  }
+  .settings-toggle:hover svg:first-child{
+    color:var(--primary);
+  }
   .settings-toggle svg:last-child{
     margin-left:auto;
-    transition:transform .2s ease;
+    transition:transform .25s ease;
+    color:var(--gray-400);
+    flex-shrink:0;
   }
   .settings-body{
     max-height:0;
     overflow:hidden;
-    transition:max-height .35s ease;
+    transition:max-height .35s cubic-bezier(.4,0,.2,1);
   }
-  .settings-body.open{max-height:300px}
+  .settings-body.open{max-height:400px}
   .settings-body-inner{
-    padding:0 1.25rem 1rem;
+    padding:.25rem 1.5rem 1.25rem;
     display:flex;
-    gap:.75rem;
-    align-items:flex-end;
-    flex-wrap:wrap;
+    flex-direction:column;
+    gap:1rem;
+    border-top:1px solid var(--gray-100);
   }
-  .settings-body-inner .settings-group{flex:1;min-width:150px}
+  .settings-body-inner .settings-group{width:100%}
+  .settings-body-inner .settings-group[style*="flex:2"]{width:100%}
   .settings-body-inner label{
     display:block;
     font-size:.78rem;
     font-weight:600;
     color:var(--gray-500);
-    margin-bottom:.25rem;
+    margin-bottom:.4rem;
+    text-transform:uppercase;
+    letter-spacing:.04em;
   }
   .settings-body-inner textarea,
   .settings-body-inner select{
     width:100%;
-    padding:.45rem .6rem;
+    padding:.55rem .75rem;
     border:1.5px solid var(--gray-200);
     border-radius:var(--radius-sm);
-    font-size:.82rem;
+    font-size:.85rem;
     font-family:inherit;
     transition:var(--transition);
+    background:var(--gray-50);
+    color:var(--gray-800);
+  }
+  .settings-body-inner textarea:hover,
+  .settings-body-inner select:hover{
+    border-color:var(--gray-300);
     background:#fff;
   }
   .settings-body-inner textarea:focus,
@@ -588,8 +616,24 @@
     outline:none;
     border-color:var(--primary);
     box-shadow:0 0 0 3px rgba(99,102,241,.1);
+    background:#fff;
   }
-  .settings-body-inner textarea{resize:vertical}
+  .settings-body-inner textarea{resize:vertical;min-height:2.5rem}
+  .settings-body-inner select{
+    appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%239ca3af' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right .75rem center;
+    padding-right:2rem;
+    cursor:pointer;
+  }
+  .settings-body-inner>.btn{
+    align-self:flex-end;
+    padding:.5rem 1.5rem;
+    font-size:.85rem;
+    border-radius:var(--radius-sm);
+    margin-top:.15rem;
+  }
 
   /* ── Responsive ── */
   @media(max-width:600px){
@@ -597,7 +641,8 @@
     .header h1{font-size:1.5rem}
     .container{padding:1rem .75rem 2rem}
     .card{padding:1.1rem}
-    .settings-body-inner{flex-direction:column}
+    .settings-body-inner{padding:.25rem 1rem 1rem}
+    .settings-body-inner>.btn{align-self:stretch;text-align:center}
     .result-header{flex-direction:column;align-items:flex-start}
     .btn-lg{width:100%}
   }
@@ -1130,6 +1175,26 @@ async function processAll() {
   }
 }
 
+// ── Diff Note (Vietnamese description of what changed) ──
+function buildDiffNote(original, fixed) {
+  const origWords = original.split(/\s+/);
+  const fixedWords = fixed.split(/\s+/);
+  const changes = [];
+  const maxLen = Math.max(origWords.length, fixedWords.length);
+  for (let i = 0; i < maxLen; i++) {
+    const o = origWords[i] || '';
+    const f = fixedWords[i] || '';
+    if (o !== f) {
+      if (o && f) changes.push(`"${o}" \u2192 "${f}"`);
+      else if (!o) changes.push(`th\xeam "${f}"`);
+      else changes.push(`b\u1ecf "${o}"`);
+    }
+  }
+  return changes.length > 0
+    ? `S\u1eeda t\u1eeb: ${changes.join(', ')}`
+    : 'Thay \u0111\u1ed5i n\u1ed9i dung';
+}
+
 // ── Render Results ──
 function renderResults() {
   const container = document.getElementById('results-container');
@@ -1171,8 +1236,9 @@ function renderResults() {
               <thead>
                 <tr>
                   <th style="width:40px">#</th>
-                  <th>G\u1ed1c (sai)</th>
-                  <th>\u0110\u00e3 s\u1eeda</th>
+                  <th>CapCut xu\u1ea5t (sai)</th>
+                  <th>\u0110\u00e3 s\u1eeda theo g\u1ed1c</th>
+                  <th style="width:30%">Ghi ch\u00fa</th>
                 </tr>
               </thead>
               <tbody>
@@ -1181,6 +1247,7 @@ function renderResults() {
                     <td class="diff-index">${e.index}</td>
                     <td class="diff-original">${escapeHTML(e.original)}</td>
                     <td class="diff-fixed">${escapeHTML(e.text)}</td>
+                    <td style="font-size:.8rem;color:var(--gray-500)">${buildDiffNote(e.original, e.text)}</td>
                   </tr>
                 `).join('')}
               </tbody>

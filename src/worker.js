@@ -40,7 +40,15 @@ function parseKeys(keysSource) {
 
 // ─── AI Interaction ──────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Fix subtitle transcription errors by comparing against the original text. Output ONLY a JSON array of corrected strings. Keep correct entries as-is. Do not merge or split entries. No explanation.`;
+const SYSTEM_PROMPT = `You fix CapCut auto-generated subtitles (SRT). CapCut's speech-to-text sometimes outputs wrong words compared to the original script.
+
+Rules:
+- ONLY replace words that are WRONG compared to the original script with the correct words from the original
+- Do NOT add, remove, or change anything else — no punctuation, no formatting, no grammar fixes
+- If a subtitle entry already matches the original script, keep it EXACTLY as-is
+- The corrected text must keep the same structure as the subtitle entry, only swapping wrong words
+- Do not merge or split entries
+- Output ONLY a JSON array of corrected strings, same order as input. No explanation.`;
 
 function buildUserPrompt(originalText, entries) {
   const numbered = entries
