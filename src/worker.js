@@ -6,7 +6,7 @@
 
 const API_ENDPOINT = 'https://platform.beeknoee.com/api/v1/chat/completions';
 const DEFAULT_API_KEY = 'sk-bee-837f622110f44d64a3ca729a77695314';
-const CHUNK_SIZE = 15;       // balanced for speed + accuracy
+const CHUNK_SIZE = 8;        // keep under TPM limits (6000 tokens/min on free tier)
 const MAX_RETRIES = 3;       // retries for non-429 errors
 const MAX_429_RETRIES = 10;  // separate budget for rate-limit retries (concurrent_limit)
 const FETCH_TIMEOUT_MS = 90_000; // 90s per API call (reasoning models need time)
@@ -273,10 +273,24 @@ export async function handleFix(request, env) {
     : (env.MODEL || 'glm-4.7-flash');
 
   // ── Chunk & process (parallel batches) ──
-  // Each batch runs up to N chunks in parallel (one per key).
-  // e.g. 3 keys, 7 chunks → batch1: [c1,c2,c3], batch2: [c4,c5,c6], batch3: [c7]
+  const totalEntries = srtEntries.length;
   const chunks = chunkArray(srtEntries, CHUNK_SIZE);
+
+  // For each chunk, extract the relevant portion of original text
+  // (subtitles are chronological, so chunk position maps to text position)
+  const textLen = originalText.length;
+  const chunkTexts = chunks.map((chunk, ci) => {
+    if (chunks.length === 1) return originalText; // single chunk: send full text
+    const startIdx = ci * CHUNK_SIZE;
+    const endIdx = startIdx + chunk.length;
+    const padChars = Math.min(500, Math.floor(textLen * 0.15));
+    const from = Math.max(0, Math.floor((startIdx / totalEntries) * textLen) - padChars);
+    const to = Math.min(textLen, Math.ceil((endIdx / totalEntries) * textLen) + padChars);
+    return originalText.slice(from, to);
+  });
+
   const batches = chunkArray(chunks, keys.length);
+  const batchTexts = chunkArray(chunkTexts, keys.length);
   const allCorrected = new Array(chunks.length);
 
   try {
@@ -287,9 +301,10 @@ export async function handleFix(request, env) {
       }
 
       const batch = batches[bi];
+      const texts = batchTexts[bi];
       const results = await Promise.all(
         batch.map((chunk, i) =>
-          callAIWithKey(chunk, originalText, keys[i % keys.length], model)
+          callAIWithKey(chunk, texts[i], keys[i % keys.length], model)
         )
       );
 
