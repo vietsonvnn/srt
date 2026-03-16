@@ -90,8 +90,12 @@ function parseAIResponse(raw) {
     const start = cleaned.indexOf('[');
     const end = cleaned.lastIndexOf(']');
     if (start !== -1 && end > start) {
-      const parsed = JSON.parse(cleaned.slice(start, end + 1));
-      if (Array.isArray(parsed)) return parsed;
+      try {
+        const parsed = JSON.parse(cleaned.slice(start, end + 1));
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // fall through to throw below
+      }
     }
     throw new Error('Failed to parse AI response as JSON array');
   }
@@ -276,6 +280,16 @@ export async function handleFix(request, env) {
       { success: false, error: `AI returned ${correctedTexts.length} entries but expected ${srtEntries.length}` },
       502,
     );
+  }
+
+  // Validate all elements are non-null strings
+  for (let i = 0; i < correctedTexts.length; i++) {
+    if (correctedTexts[i] == null || typeof correctedTexts[i] === 'object') {
+      return corsResponse(
+        { success: false, error: `AI returned invalid value at position ${i} (expected string)` },
+        502,
+      );
+    }
   }
 
   // ── Build response ──

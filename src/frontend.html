@@ -1168,14 +1168,32 @@ async function fixSRT(srtEntries, originalText, onProgress) {
     if (ci > 0) await new Promise(r => setTimeout(r, CHUNK_DELAY_MS));
     if (onProgress) onProgress(ci + 1, chunks.length);
 
-    // Proportional text for this chunk
+    // Build context text for this chunk
+    // For small files (≤2 chunks), send full text to avoid bad slicing
+    // For larger files, find the chunk's text range by searching for first/last entry words
     let chunkText = originalText;
-    if (chunks.length > 1) {
-      const startIdx = ci * CHUNK_SIZE;
-      const endIdx = startIdx + chunks[ci].length;
-      const pad = Math.min(500, Math.floor(textLen * 0.15));
-      const from = Math.max(0, Math.floor((startIdx / totalEntries) * textLen) - pad);
-      const to = Math.min(textLen, Math.ceil((endIdx / totalEntries) * textLen) + pad);
+    if (chunks.length > 2) {
+      const chunk = chunks[ci];
+      const firstText = chunk[0].text;
+      const lastText = chunk[chunk.length - 1].text;
+      // Find where this chunk's content starts/ends in the original
+      const firstWord = firstText.split(/\s+/)[0];
+      const lastWord = lastText.split(/\s+/).pop();
+      let from = originalText.indexOf(firstWord);
+      let to = originalText.lastIndexOf(lastWord);
+      if (from === -1 || to === -1 || to <= from) {
+        // Fallback to proportional slicing
+        const startIdx = ci * CHUNK_SIZE;
+        const endIdx = startIdx + chunk.length;
+        const pad = Math.min(500, Math.floor(textLen * 0.15));
+        from = Math.max(0, Math.floor((startIdx / totalEntries) * textLen) - pad);
+        to = Math.min(textLen, Math.ceil((endIdx / totalEntries) * textLen) + pad);
+      } else {
+        // Expand with generous padding
+        const pad = Math.min(800, Math.floor(textLen * 0.2));
+        from = Math.max(0, from - pad);
+        to = Math.min(textLen, to + lastWord.length + pad);
+      }
       chunkText = originalText.slice(from, to);
     }
 
@@ -1367,7 +1385,7 @@ function renderResults() {
                     <td class="diff-index">${e.index}</td>
                     <td class="diff-original">${escapeHTML(e.original)}</td>
                     <td class="diff-fixed">${escapeHTML(e.text)}</td>
-                    <td style="font-size:.8rem;color:var(--gray-500)">${buildDiffNote(e.original, e.text)}</td>
+                    <td style="font-size:.8rem;color:var(--gray-500)">${escapeHTML(buildDiffNote(e.original, e.text))}</td>
                   </tr>
                 `).join('')}
               </tbody>
