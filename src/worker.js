@@ -6,11 +6,9 @@
 
 const API_ENDPOINT = 'https://platform.beeknoee.com/api/v1/chat/completions';
 const DEFAULT_API_KEY = 'sk-bee-837f622110f44d64a3ca729a77695314';
-const CHUNK_SIZE = 8;        // keep under TPM limits (6000 tokens/min on free tier)
 const MAX_RETRIES = 3;       // retries for non-429 errors
 const MAX_429_RETRIES = 10;  // separate budget for rate-limit retries (concurrent_limit)
-const FETCH_TIMEOUT_MS = 90_000; // 90s per API call (reasoning models need time)
-const CHUNK_DELAY_MS = 3_000; // 3s delay between batches
+const FETCH_TIMEOUT_MS = 90_000; // 90s per API call
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 
@@ -201,16 +199,6 @@ async function callAIWithKey(entries, originalText, key, model) {
   throw lastError || new Error('Max retries exceeded');
 }
 
-// ─── Chunking ────────────────────────────────────────────────────────────────
-
-function chunkArray(arr, size) {
-  const chunks = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
-}
-
 // ─── Main Fix Logic ──────────────────────────────────────────────────────────
 
 export async function handleFix(request, env) {
@@ -272,69 +260,29 @@ export async function handleFix(request, env) {
     ? requestModel
     : (env.MODEL || 'glm-4.7-flash');
 
-  // ── Chunk & process (parallel batches) ──
-  const totalEntries = srtEntries.length;
-  const chunks = chunkArray(srtEntries, CHUNK_SIZE);
+  // ── Process (single API call — chunking done by frontend) ──
+  const key = keys[Math.floor(Math.random() * keys.length)];
 
-  // For each chunk, extract the relevant portion of original text
-  // (subtitles are chronological, so chunk position maps to text position)
-  const textLen = originalText.length;
-  const chunkTexts = chunks.map((chunk, ci) => {
-    if (chunks.length === 1) return originalText; // single chunk: send full text
-    const startIdx = ci * CHUNK_SIZE;
-    const endIdx = startIdx + chunk.length;
-    const padChars = Math.min(500, Math.floor(textLen * 0.15));
-    const from = Math.max(0, Math.floor((startIdx / totalEntries) * textLen) - padChars);
-    const to = Math.min(textLen, Math.ceil((endIdx / totalEntries) * textLen) + padChars);
-    return originalText.slice(from, to);
-  });
-
-  const batches = chunkArray(chunks, keys.length);
-  const batchTexts = chunkArray(chunkTexts, keys.length);
-  const allCorrected = new Array(chunks.length);
-
+  let correctedTexts;
   try {
-    let chunkOffset = 0;
-    for (let bi = 0; bi < batches.length; bi++) {
-      if (bi > 0) {
-        await new Promise(r => setTimeout(r, CHUNK_DELAY_MS));
-      }
-
-      const batch = batches[bi];
-      const texts = batchTexts[bi];
-      const results = await Promise.all(
-        batch.map((chunk, i) =>
-          callAIWithKey(chunk, texts[i], keys[i % keys.length], model)
-        )
-      );
-
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].length !== batch[i].length) {
-          return corsResponse(
-            {
-              success: false,
-              error: `AI returned ${results[i].length} entries but expected ${batch[i].length}`,
-            },
-            502,
-          );
-        }
-        allCorrected[chunkOffset + i] = results[i];
-      }
-      chunkOffset += batch.length;
-    }
+    correctedTexts = await callAIWithKey(srtEntries, originalText, key, model);
   } catch (err) {
-    const status = err.message.includes('exhausted') || err.message.includes('rate-limited') ? 503 : 502;
+    const status = err.message.includes('429') ? 503 : 502;
     return corsResponse({ success: false, error: `Processing failed: ${err.message}` }, status);
   }
 
-  // Flatten chunk results into a single array
-  const flatCorrected = allCorrected.flat();
+  if (correctedTexts.length !== srtEntries.length) {
+    return corsResponse(
+      { success: false, error: `AI returned ${correctedTexts.length} entries but expected ${srtEntries.length}` },
+      502,
+    );
+  }
 
   // ── Build response ──
   let fixedCount = 0;
 
   const fixed = srtEntries.map((entry, i) => {
-    const correctedText = String(flatCorrected[i]);
+    const correctedText = String(correctedTexts[i]);
     const changed = correctedText !== entry.text;
     if (changed) fixedCount++;
 

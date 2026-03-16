@@ -1120,11 +1120,14 @@ async function extractText(file) {
 }
 
 // ── API Call ──
-async function fixSRT(srtEntries, originalText) {
+const CHUNK_SIZE = 8;
+const CHUNK_DELAY_MS = 2000;
+
+async function callFixAPI(entries, originalText) {
   const apiKeys = localStorage.getItem('srt_fixer_api_keys') || '';
   const model = localStorage.getItem('srt_fixer_model') || '';
 
-  const payload = { srtEntries, originalText };
+  const payload = { srtEntries: entries, originalText };
   if (apiKeys.trim()) payload.apiKeys = apiKeys;
   if (model.trim()) payload.model = model;
 
@@ -1139,14 +1142,53 @@ async function fixSRT(srtEntries, originalText) {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`Lỗi server (HTTP ${response.status}). Vui lòng thử lại.`);
+    throw new Error(`L\u1ed7i server (HTTP ${response.status}). Vui l\u00f2ng th\u1eed l\u1ea1i.`);
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || `Lỗi API (${response.status})`);
+    throw new Error(data.error || `L\u1ed7i API (${response.status})`);
   }
 
   return data;
+}
+
+// Chunking + proportional text splitting done on frontend
+async function fixSRT(srtEntries, originalText, onProgress) {
+  const totalEntries = srtEntries.length;
+  const chunks = [];
+  for (let i = 0; i < totalEntries; i += CHUNK_SIZE) {
+    chunks.push(srtEntries.slice(i, i + CHUNK_SIZE));
+  }
+
+  const textLen = originalText.length;
+  let allFixed = [];
+  let totalErrors = 0;
+
+  for (let ci = 0; ci < chunks.length; ci++) {
+    if (ci > 0) await new Promise(r => setTimeout(r, CHUNK_DELAY_MS));
+    if (onProgress) onProgress(ci + 1, chunks.length);
+
+    // Proportional text for this chunk
+    let chunkText = originalText;
+    if (chunks.length > 1) {
+      const startIdx = ci * CHUNK_SIZE;
+      const endIdx = startIdx + chunks[ci].length;
+      const pad = Math.min(500, Math.floor(textLen * 0.15));
+      const from = Math.max(0, Math.floor((startIdx / totalEntries) * textLen) - pad);
+      const to = Math.min(textLen, Math.ceil((endIdx / totalEntries) * textLen) + pad);
+      chunkText = originalText.slice(from, to);
+    }
+
+    const result = await callFixAPI(chunks[ci], chunkText);
+    allFixed = allFixed.concat(result.fixed);
+    totalErrors += result.stats.errors;
+  }
+
+  return {
+    success: true,
+    fixed: allFixed,
+    stats: { total: totalEntries, errors: totalErrors, fixed: totalErrors },
+  };
 }
 
 // ── Processing ──
@@ -1217,7 +1259,9 @@ async function processAll() {
         continue;
       }
 
-      const apiResult = await fixSRT(srtEntries, originalText);
+      const apiResult = await fixSRT(srtEntries, originalText, (done, total) => {
+        progressText.textContent = `${cp.srtFile.name}: chunk ${done}/${total}`;
+      });
 
       if (!apiResult.success) {
         showToast(`${cp.srtFile.name}: ${apiResult.error || 'Lỗi không xác định'}`);
